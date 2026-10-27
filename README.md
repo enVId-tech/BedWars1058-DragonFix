@@ -1,4 +1,4 @@
-# DragonFix
+# BedWars1058-DragonFix
 
 Hypixel-style sudden-death dragons for BedWars1058 (and compatible forks such as BedWars2023),
 Spigot/Paper 1.8 - 1.21.4, Java 8+.
@@ -6,7 +6,7 @@ Spigot/Paper 1.8 - 1.21.4, Java 8+.
 ## Build
 
 ```
-gradle build          # jar ends up in build/libs/DragonFix-1.0.0.jar
+gradle build          # jar ends up in build/libs/BedWars1058-DragonFix-1.0.0.jar
 ```
 
 The only compile dependency is the Spigot **1.8.8** API. The BedWars API is used through reflection
@@ -23,7 +23,23 @@ are reflective too.
 * Dragons never perch (vanilla AI is parked, the plugin owns the dragon's position).
 * Dragons hunt players and raid bases, breaking any block except protected ones (BedWars' own
   protected regions / generator radius, shops, beds, barriers, ...). Every broken block is stored and
-  restored at game end / server stop.
-* `/hxdragons reload`, `/hxdragons status` (permission `DragonFix.admin`).
+  restored at game end / server stop. If a restored block lands inside a player they are moved up to the next free block (`map-damage.restore.rescue-players`).
+* `/bw-dragonfix reload`, `/bw-dragonfix status` (permission `dragonfix.admin`).
+* `/bw-dragonfix config <list [section] | get <path> | set <path> <value> | add <path> <value> | remove <path> <value> | reload>`
+  edits options live (e.g. `/bw-dragonfix config set map-damage.enabled false`); changes apply immediately and are saved to config.yml with comments kept.
 
 See `config.yml` for every option.
+
+## Target modes
+`aggression.target-modes` is a list; pick one or several (each new target rolls one of the selected modes):
+`RANDOM` (random points across the map), `HYBRID` (mostly random, sometimes a player), `BASE` (bases only),
+`MIDDLE` (middle islands / generators only), `PLAYER` (players only, one random player at a time, switching every
+`player-switch-seconds`), `ALL` (players, bases and middle - the default). `aggression.spread-out` sends dragons
+to the bases with the fewest dragons so they do not pile on one base.
+In game: `/bw-dragonfix config add aggression.target-modes BASE`, `/bw-dragonfix config remove aggression.target-modes ALL`.
+
+## Developer note
+This plugin is coded with AI assistance and architected completely by me. Regardless, use at your own risk.
+
+## License
+This plugin is under the MIT License, check the [License](LICENSE) file for more details.

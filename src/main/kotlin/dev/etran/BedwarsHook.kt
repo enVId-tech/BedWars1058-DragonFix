@@ -32,7 +32,7 @@ object Reflect {
         return try {
             val m = target.javaClass.methods.firstOrNull { m ->
                 m.name == method && m.parameterTypes.size == args.size &&
-                        m.parameterTypes.indices.all { assignable(m.parameterTypes[it], args[it]) }
+                    m.parameterTypes.indices.all { assignable(m.parameterTypes[it], args[it]) }
             } ?: return null
             m.isAccessible = true
             m.invoke(target, *args)
@@ -104,6 +104,8 @@ class ArenaInfo(
     val centerZ: Double,
     /** Spheres (x, y, z, radius) that dragons may never break blocks in. */
     val protectedSpheres: List<DoubleArray>,
+    /** Arena-wide (diamond / emerald) generator positions: the middle islands. */
+    val middlePoints: List<org.bukkit.util.Vector>,
 )
 
 object BedwarsHook {
@@ -178,6 +180,11 @@ object BedwarsHook {
             addSphere(b.team.upgrades, s.protectShopRadius)
             addSphere(b.spawn, s.protectSpawnRadius)
         }
-        return ArenaInfo(arena, world, bases, avgY, cx, cz, spheres)
+        val middle = ArrayList<org.bukkit.util.Vector>()
+        for (g in arena.oreGenerators) {
+            val l = Reflect.call(g, "getLocation") as? Location ?: continue
+            middle += org.bukkit.util.Vector(l.x, l.y, l.z)
+        }
+        return ArenaInfo(arena, world, bases, avgY, cx, cz, spheres, middle)
     }
 }

@@ -4,6 +4,9 @@ import org.bukkit.configuration.file.FileConfiguration
 
 enum class TargetStrategy { NEAREST, RANDOM, LOWEST_HEALTH }
 
+/** What dragons go after. Several can be active at once; each new target rolls one of the selected modes. */
+enum class TargetMode { RANDOM, HYBRID, BASE, MIDDLE, PLAYER, ALL }
+
 /** Immutable snapshot of config.yml. A new one is built on every reload. */
 class Settings(c: FileConfiguration) {
     // general
@@ -51,6 +54,22 @@ class Settings(c: FileConfiguration) {
         TargetStrategy.valueOf(c.getString("aggression.target-strategy", "NEAREST")!!.uppercase())
     }.getOrDefault(TargetStrategy.NEAREST)
 
+    val targetModes: Set<TargetMode> = run {
+        val raw = c.get("aggression.target-modes")
+        val names: List<String> = when (raw) {
+            is List<*> -> raw.map { it.toString() }
+            is String -> raw.split(',', ' ', ';')
+            else -> emptyList()
+        }
+        val set = names.mapNotNull { n -> runCatching { TargetMode.valueOf(n.trim().uppercase()) }.getOrNull() }.toSet()
+        if (set.isEmpty()) setOf(TargetMode.ALL) else set
+    }
+    val randomMargin = c.getDouble("aggression.random-margin", 40.0).coerceAtLeast(0.0)
+    val hybridPlayerChance = c.getDouble("aggression.hybrid-player-chance", 0.25).coerceIn(0.0, 1.0)
+    val allMiddleChance = c.getDouble("aggression.all-middle-chance", 0.15).coerceIn(0.0, 1.0)
+    val playerSwitchTicks = (c.getDouble("aggression.player-switch-seconds", 12.0) * 20).toInt().coerceAtLeast(20)
+    val spreadOut = c.getBoolean("aggression.spread-out", true)
+
     // combat
     val contactDamage = c.getDouble("combat.contact-damage", 8.0)
     val hitRadiusH = c.getDouble("combat.hit-radius-horizontal", 7.0)
@@ -81,6 +100,7 @@ class Settings(c: FileConfiguration) {
     val restoreOnDisable = c.getBoolean("map-damage.restore.on-disable", true)
     val restorePerTick = c.getInt("map-damage.restore.blocks-per-tick", 3000).coerceAtLeast(1)
     val restoreDelay = c.getInt("map-damage.restore.delay-ticks", 0).coerceAtLeast(0)
+    val rescuePlayers = c.getBoolean("map-damage.restore.rescue-players", true)
 
     // entities
     val protectedEntityTypes: Set<String> =

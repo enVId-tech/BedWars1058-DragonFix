@@ -77,7 +77,14 @@ class DamageStore(private val plugin: Plugin) {
      * Restore all damage in [world]. With [instant] the whole thing happens synchronously
      * (used on shutdown); otherwise it is spread over ticks, [perTick] blocks at a time.
      */
-    fun restore(world: World, perTick: Int, delayTicks: Int, instant: Boolean, onDone: () -> Unit = {}) {
+    fun restore(
+        world: World,
+        perTick: Int,
+        delayTicks: Int,
+        instant: Boolean,
+        rescue: Boolean = false,
+        onDone: () -> Unit = {},
+    ) {
         val id = world.uid
         val map = saved[id]
         if (map == null || map.isEmpty()) {
@@ -88,6 +95,7 @@ class DamageStore(private val plugin: Plugin) {
         if (instant) {
             for (st in map.values) applyState(st)
             saved.remove(id)
+            if (rescue) rescuePlayers(world)
             onDone()
             return
         }
@@ -108,6 +116,7 @@ class DamageStore(private val plugin: Plugin) {
                     it.remove()
                     n++
                 }
+                if (rescue) rescuePlayers(w)
                 if (m.isEmpty()) {
                     saved.remove(id)
                     restoring.remove(id)
@@ -119,10 +128,82 @@ class DamageStore(private val plugin: Plugin) {
     }
 
     /** Synchronously restore every world (plugin disable). */
-    fun restoreAllNow() {
+    fun restoreAllNow(rescue: Boolean = false) {
         for (id in saved.keys.toList()) {
             val w = Bukkit.getWorld(id)
-            if (w != null) restore(w, Int.MAX_VALUE, 0, instant = true) else forget(id)
+            if (w != null) restore(w, Int.MAX_VALUE, 0, instant = true, rescue = rescue) else forget(id)
+        }
+    }
+
+    // ------------------------------------------------------------------ player rescue
+
+    private fun solid(b: Block): Boolean = b.type.isSolid
+
+    private fun hazard(b: Block): Boolean = b.type.name.contains("LAVA") || b.type.name == "FIRE"
+
+    /** A spot a player can stand: solid ground below, feet and head blocks free. */
+    private fun standable(w: World, x: Int, y: Int, z: Int): Boolean {
+        if (y < 1 || y + 1 >= w.maxHeight) return false
+        val feet = w.getBlockAt(x, y, z)
+        val head = w.getBlockAt(x, y + 1, z)
+        val below = w.getBlockAt(x, y - 1, z)
+        return !solid(feet) && !solid(head) && solid(below) && !hazard(feet) && !hazard(head) && !hazard(below)
+    }
+
+    /**
+     * Restored blocks can appear inside a player. Anyone whose feet or head is now inside a solid block is moved
+     * to the closest free standing spot straight above them (the next available block), falling back to the
+     * nearest free spot around them when nothing above works.
+     */
+    private fun rescuePlayers(world: World) {
+        for (p in world.players) {
+            try {
+                if (p.gameMode.name == "SPECTATOR" || (p.allowFlight && p.isFlying)) continue
+                val loc = p.location
+                val bx = loc.blockX
+                val by = loc.blockY
+                val bz = loc.blockZ
+                if (!solid(world.getBlockAt(bx, by, bz)) && !solid(world.getBlockAt(bx, by + 1, bz))) continue
+
+                var target: Int? = null
+                var y = by
+                while (y < world.maxHeight - 1) {
+                    if (standable(world, bx, y, bz)) {
+                        target = y
+                        break
+                    }
+                    y++
+                }
+                var tx = bx
+                var tz = bz
+                if (target == null) {
+                    // Sealed in from above (e.g. a roof): look at neighbouring columns, nearest first.
+                    search@ for (r in 1..6) {
+                        for (dx in -r..r) for (dz in -r..r) {
+                            if (Math.abs(dx) != r && Math.abs(dz) != r) continue
+                            for (yy in (by - 3)..(by + 3)) {
+                                if (standable(world, bx + dx, yy, bz + dz)) {
+                                    target = yy
+                                    tx = bx + dx
+                                    tz = bz + dz
+                                    break@search
+                                }
+                            }
+                        }
+                    }
+                }
+                val ty = target ?: continue
+                val dest = if (tx == bx && tz == bz) {
+                    loc.clone().apply { this.y = ty.toDouble() }
+                } else {
+                    org.bukkit.Location(world, tx + 0.5, ty.toDouble(), tz + 0.5, loc.yaw, loc.pitch)
+                }
+                p.teleport(dest)
+                p.velocity = org.bukkit.util.Vector(0, 0, 0)
+                p.fallDistance = 0f
+            } catch (t: Throwable) {
+                plugin.logger.fine("Could not rescue ${p.name}: ${t.message}")
+            }
         }
     }
 

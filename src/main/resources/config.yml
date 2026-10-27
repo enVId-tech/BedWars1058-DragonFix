@@ -1,7 +1,7 @@
 # ============================================================================
-#  DragonFix - config.yml
+#  BedWars1058-DragonFix - config.yml
 #  All distances are in blocks, speeds are blocks per tick (20 ticks = 1 second).
-#  /hxdragons reload re-reads this file (new values apply to dragons spawned afterwards
+#  /bw-dragonfix reload re-reads this file (new values apply to dragons spawned afterwards
 #  for spawn settings, and immediately for everything else).
 # ============================================================================
 
@@ -81,8 +81,30 @@ aggression:
   # Dragons spawned for a base do not hurt that base's own team (BedWars1058 vanilla behaviour).
   # Hypixel dragons attack everybody, so this is off by default.
   protect-own-team: false
-  # Pick targets with this strategy: NEAREST, RANDOM, LOWEST_HEALTH
+  # Pick targets with this strategy (used by the ALL mode): NEAREST, RANDOM, LOWEST_HEALTH
   target-strategy: NEAREST
+
+  # What dragons go after. Select one or several; with several, every new target rolls one of the selected
+  # modes at random. Edit in game with: /bw-dragonfix config add aggression.target-modes BASE  (or remove).
+  #   RANDOM  - fly to a random point in the map, then another random point, and so on
+  #   HYBRID  - mostly random points, sometimes a random player (hybrid-player-chance)
+  #   BASE    - only bases (never players)
+  #   MIDDLE  - only the middle islands and generators
+  #   PLAYER  - only players: one random player at a time, switching after player-switch-seconds so a
+  #             dragon never stays stuck on an unreachable / ghost player
+  #   ALL     - players, bases and the middle (the original behaviour: raid-chance, hunt-range, ...)
+  target-modes:
+    - ALL
+  # RANDOM / HYBRID: extra distance beyond the outermost bases that random points may be picked in.
+  random-margin: 40.0
+  # HYBRID: chance (0.0 - 1.0) that a new target is a player instead of a random point.
+  hybrid-player-chance: 0.25
+  # ALL: chance that a new target is the middle islands / generators (on top of raid-chance for bases).
+  all-middle-chance: 0.15
+  # PLAYER / HYBRID: seconds a dragon keeps chasing the same player before picking another at random.
+  player-switch-seconds: 12.0
+  # BASE / ALL: send dragons to the bases with the fewest dragons on them, so they do not pile up on one base.
+  spread-out: true
 
 combat:
   # Damage dealt to a player on contact with the dragon body/wings.
@@ -153,6 +175,9 @@ map-damage:
     blocks-per-tick: 3000
     # Ticks to wait after the game ends before restoring.
     delay-ticks: 0
+    # If a restored block lands inside a player, move that player up to the next free block so they are not
+    # stuck in the floor (if nothing is free above, the nearest free spot around them is used).
+    rescue-players: true
 
 entities:
   # Non-player entities of these types (shops, holograms ...) are never damaged or pushed by dragons.

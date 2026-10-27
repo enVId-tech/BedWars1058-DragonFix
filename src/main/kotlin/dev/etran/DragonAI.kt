@@ -52,6 +52,10 @@ class DragonAI(val dragon: EnderDragon, val base: BaseInfo?, startPos: Vector, s
     var lastRaidBase: BaseInfo? = null
 
     var retargetIn = 0
+
+    /** PLAYER / HYBRID hunting: stick to one player until this tick, then pick another at random. */
+    var lockedTarget: Player? = null
+    var lockedUntil = 0L
     var raidTicksLeft = 0
     var overshootTicksLeft = 0
     val lastHit = HashMap<java.util.UUID, Long>()

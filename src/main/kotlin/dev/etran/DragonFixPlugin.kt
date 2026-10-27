@@ -31,9 +31,12 @@ class DragonFixPlugin : JavaPlugin(), Listener {
     /** One session per arena world (key = world name). */
     private val sessions = HashMap<String, DragonSession>()
 
+    /** /bw-dragonfix config ...: edit options in game; changes apply immediately and are saved to config.yml. */
+    private val configCmd = ConfigCommand(this) { settings = Settings(config) }
+
     companion object {
         /** Metadata tag set on every dragon controlled by this plugin. */
-        const val META = "DragonFix"
+        const val META = "dragonfix"
     }
 
     override fun onEnable() {
@@ -49,14 +52,14 @@ class DragonFixPlugin : JavaPlugin(), Listener {
         server.pluginManager.registerEvents(this, this)
         registerBedwarsEvents()
         registerPhaseGuard()
-        logger.info("DragonFix enabled (BedWars API: ${BedwarsHook.prefix}).")
+        logger.info("BedWars1058-DragonFix enabled (BedWars API: ${BedwarsHook.prefix}).")
     }
 
     override fun onDisable() {
         for (s in sessions.values) s.end()
         sessions.clear()
         if (::damageStore.isInitialized && ::settings.isInitialized) {
-            if (settings.restoreOnDisable) damageStore.restoreAllNow()
+            if (settings.restoreOnDisable) damageStore.restoreAllNow(settings.rescuePlayers)
         }
     }
 
@@ -66,7 +69,9 @@ class DragonFixPlugin : JavaPlugin(), Listener {
         sessions.remove(arena.worldName)?.end()
         if (restoreMap && settings.restoreOnGameEnd) {
             val w = Bukkit.getWorld(arena.worldName) ?: return
-            damageStore.restore(w, settings.restorePerTick, settings.restoreDelay, instant = false)
+            damageStore.restore(
+                w, settings.restorePerTick, settings.restoreDelay, instant = false, rescue = settings.rescuePlayers,
+            )
         }
     }
 
@@ -218,11 +223,8 @@ class DragonFixPlugin : JavaPlugin(), Listener {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         when (args.firstOrNull()?.lowercase()) {
-            "reload" -> {
-                reloadConfig()
-                settings = Settings(config)
-                sender.sendMessage("DragonFix config reloaded.")
-            }
+            "reload" -> configCmd.reload(sender)
+            "config" -> configCmd.handle(sender, args.drop(1), label)
             "status" -> {
                 if (sessions.isEmpty()) sender.sendMessage("No arena is in sudden death.")
                 for ((world, s) in sessions) {
@@ -234,8 +236,16 @@ class DragonFixPlugin : JavaPlugin(), Listener {
                     )
                 }
             }
-            else -> sender.sendMessage("/$label <reload|status>")
+            else -> sender.sendMessage("/$label <reload | status | config ...>")
         }
         return true
+    }
+
+    override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
+        return when {
+            args.size == 1 -> listOf("reload", "status", "config").filter { it.startsWith(args[0], ignoreCase = true) }
+            args[0].equals("config", ignoreCase = true) -> configCmd.complete(args.drop(1))
+            else -> emptyList()
+        }
     }
 }

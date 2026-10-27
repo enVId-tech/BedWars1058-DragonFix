@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "dev.etran"
-version = "1.0.0"
+version = "1.1.0"
 
 val spigotApiVersion: String by project
 
@@ -47,7 +47,7 @@ tasks {
 
     shadowJar {
         archiveClassifier.set("")
-        archiveFileName.set("DragonFix-${project.version}.jar")
+        archiveFileName.set("BedWars1058-DragonFix-${project.version}.jar")
         // Servers on 1.8 cannot load libraries from plugin.yml, so Kotlin is shaded and relocated.
         relocate("kotlin", "dev.etran.libs.kotlin")
         relocate("org.jetbrains", "dev.etran.libs.jetbrains")
