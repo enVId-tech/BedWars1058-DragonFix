@@ -1,0 +1,15 @@
+name: DragonFix
+main: dev.etran.DragonFixPlugin
+version: ${version}
+api-version: 1.13
+softdepend: [BedWars1058, BedWars2023]
+authors: [you]
+description: Hypixel-style sudden death dragons for BedWars1058.
+commands:
+  hxdragons:
+    description: Admin command for DragonFix.
+    usage: /hxdragons <reload|status>
+    permission: DragonFix.admin
+permissions:
+  DragonFix.admin:
+    default: op

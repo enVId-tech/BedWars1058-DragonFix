@@ -1,0 +1,169 @@
+# ============================================================================
+#  DragonFix - config.yml
+#  All distances are in blocks, speeds are blocks per tick (20 ticks = 1 second).
+#  /hxdragons reload re-reads this file (new values apply to dragons spawned afterwards
+#  for spawn settings, and immediately for everything else).
+# ============================================================================
+
+general:
+  # Arena names (map names OR world names) the plugin is active in. Empty list = all arenas.
+  enabled-arenas: []
+  # Arenas listed here are ignored even if enabled-arenas is empty.
+  disabled-arenas: []
+  debug: false
+
+spawning:
+  # Cancel the dragons BedWars1058 spawns and replace them with ours.
+  replace-vanilla-dragons: true
+  # One group of dragons per BASE in the map (not per team / not per player).
+  dragons-per-base: 1
+  # Bases that belong to a team that bought the "Dragon Buff" upgrade spawn this many extra dragons.
+  honor-dragon-buff: true
+  dragon-buff-extra-dragons: 1
+  # Flat extra dragons added on top, spawned above the map centre.
+  extra-dragons: 0
+  # Spawn height = (average Y of all bases) + this value, clamped to the world height limit.
+  height-above-base-average: 45
+  # Keep this many blocks free below the world's max build height.
+  world-height-margin: 4
+  # Random horizontal spread of the spawn point around the base (blocks).
+  spawn-spread: 6
+  # Ticks between each dragon spawning (0 = all at once).
+  spawn-stagger-ticks: 4
+  # Dragon max health. Vanilla = 200.
+  health: 200.0
+  # If true dragons cannot be damaged at all.
+  invulnerable: false
+  # Remove dragons when the game ends.
+  remove-on-game-end: true
+
+flight:
+  # Dragons never perch / hover over the centre / do the vanilla landing sequence.
+  never-perch: true
+  # Normal cruising speed.
+  speed: 0.85
+  # Speed while charging at a player or diving into a base.
+  charge-speed: 1.25
+  # Max rotation per tick in degrees (lower = wider turns).
+  turn-rate: 14.0
+  # Vertical acceleration limit (blocks/tick) when climbing or diving.
+  vertical-speed: 0.6
+  # Cruise altitude is (average base Y) + this. Used when no target is close.
+  cruise-height-above-base-average: 18
+  # While raiding a base the dragon flies at (average base Y) + this, i.e. through the buildings.
+  raid-height-above-base-average: 2
+  # While hunting, aim this far above the target's feet (so wings/body connect with the player).
+  target-y-offset: 1.0
+  # Horizontal distance from a target at which a charge counts as "finished" and a new pass begins.
+  pass-through-distance: 14.0
+  # After passing through the target, keep flying this far past it before turning (blocks).
+  overshoot-distance: 22.0
+  # Added to the dragon's yaw so its head points where it flies (the model faces backwards).
+  # Only change this if dragons visibly fly tail-first on your server version.
+  yaw-offset: 180.0
+
+aggression:
+  # Players further than this from a dragon are ignored when hunting.
+  hunt-range: 160.0
+  # Ticks between re-evaluating the target.
+  retarget-interval: 30
+  # 0.0 - 1.0 : chance that, when choosing a new target, the dragon goes to RAID a base
+  # even though players are available. Higher = breaks more bases.
+  raid-chance: 0.45
+  # If no player is within hunt-range, the dragon always raids bases.
+  raid-when-no-players: true
+  # Ticks a dragon keeps raiding a base before re-evaluating.
+  raid-duration: 160
+  # Prefer raiding bases of teams that still have living players.
+  prefer-alive-team-bases: true
+  # Dragons ignore spectators and players in creative mode.
+  ignore-spectators: true
+  # Dragons spawned for a base do not hurt that base's own team (BedWars1058 vanilla behaviour).
+  # Hypixel dragons attack everybody, so this is off by default.
+  protect-own-team: false
+  # Pick targets with this strategy: NEAREST, RANDOM, LOWEST_HEALTH
+  target-strategy: NEAREST
+
+combat:
+  # Damage dealt to a player on contact with the dragon body/wings.
+  contact-damage: 8.0
+  # Contact hitbox: how far from the dragon centre a player is "hit".
+  hit-radius-horizontal: 7.0
+  hit-radius-vertical: 4.5
+  # Ticks before the same player can be hit by the same dragon again.
+  hit-cooldown: 20
+  # Knockback strength (horizontal, away from the dragon's heading side) and lift.
+  knockback-horizontal: 1.6
+  knockback-vertical: 0.75
+  # Set hit players on fire for this many ticks (0 = off).
+  fire-ticks: 0
+
+map-damage:
+  # Master switch for dragons breaking blocks.
+  enabled: true
+  # Blocks broken around the dragon each tick: a box of this half-size (X/Z) and half-height (Y).
+  break-radius-horizontal: 4
+  break-radius-vertical: 3
+  # Run the block-breaking pass every N ticks (1 = every tick).
+  interval-ticks: 2
+  # Performance cap per dragon per pass.
+  max-blocks-per-tick: 120
+  # Let dragons remove water / lava too.
+  break-liquids: false
+  # Hard cap on stored blocks per arena (protects memory). Dragons stop breaking when reached.
+  max-stored-blocks: 250000
+  # Do not break blocks below this Y (void safety).
+  min-y: 1
+  # Play block-break effects (particles/sound) for broken blocks. Costs bandwidth, off by default.
+  break-effects: false
+  # Materials a dragon can NEVER break (names are matched case-insensitively; names not
+  # existing on the running version are ignored, so one list works for 1.8 - 1.21).
+  protected-materials:
+    - BARRIER
+    - BEDROCK
+    - STRUCTURE_VOID
+    - LIGHT
+    - END_PORTAL
+    - END_PORTAL_FRAME
+    - END_GATEWAY
+    - COMMAND
+    - COMMAND_BLOCK
+    - CHAIN_COMMAND_BLOCK
+    - REPEATING_COMMAND_BLOCK
+    - COMMAND_CHAIN
+    - COMMAND_REPEATING
+  # Also honour BedWars' own build protection: the protected regions and generator radius from the
+  # arena config, and everything outside the map border. Recommended.
+  respect-bedwars-protection: true
+  # BedWars bed blocks are protected (BedWars1058 tracks them itself).
+  protect-beds: true
+  # Keep this radius clear around every generator location (so generator platforms survive).
+  protect-generator-radius: 2.5
+  # Keep this radius clear around shop / team upgrade NPC locations.
+  protect-shop-radius: 2.5
+  # Keep this radius clear around team spawn points (0 = allow breaking).
+  protect-spawn-radius: 0.0
+
+  restore:
+    # Restore every block broken by a dragon when the game ends.
+    on-game-end: true
+    # Also restore when the server / plugin stops.
+    on-disable: true
+    # Blocks restored per tick (spreads the work so the server does not lag).
+    blocks-per-tick: 3000
+    # Ticks to wait after the game ends before restoring.
+    delay-ticks: 0
+
+entities:
+  # Non-player entities of these types (shops, holograms ...) are never damaged or pushed by dragons.
+  protected-types:
+    - ARMOR_STAND
+    - VILLAGER
+    - ITEM_FRAME
+    - PAINTING
+  # Add IRON_GOLEM / SILVERFISH here if you want team defenders to survive dragon passes.
+  # Entities of these types are also held in place (teleported back) while a dragon is near,
+  # so wing pushes cannot move shops or generator holograms.
+  freeze-types:
+    - ARMOR_STAND
+    - VILLAGER
