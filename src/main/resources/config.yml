@@ -54,7 +54,8 @@ flight:
   raid-height-above-base-average: 2
   # While hunting, aim this far above the target's feet (so wings/body connect with the player).
   target-y-offset: 1.0
-  # Horizontal distance from a target at which a charge counts as "finished" and a new pass begins.
+  # A pass only ends once the dragon has hit its target, or has missed and flown past it (target behind the
+  # dragon) while closer than this horizontal distance. Getting close alone never ends a charge.
   pass-through-distance: 14.0
   # After passing through the target, keep flying this far past it before turning (blocks).
   overshoot-distance: 22.0
@@ -112,6 +113,8 @@ combat:
   # Contact hitbox: how far from the dragon centre a player is "hit".
   hit-radius-horizontal: 7.0
   hit-radius-vertical: 4.5
+  # The head is this far ahead of the dragon's centre; players near the head are hit too.
+  head-offset: 6.0
   # Ticks before the same player can be hit by the same dragon again.
   hit-cooldown: 20
   # Knockback strength (horizontal, away from the dragon's heading side) and lift.

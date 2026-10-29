@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "dev.etran"
-version = "1.1.0"
+version = "1.0.0"
 
 val spigotApiVersion: String by project
 

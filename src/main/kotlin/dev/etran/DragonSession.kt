@@ -207,7 +207,11 @@ class DragonSession(private val plugin: DragonFixPlugin, val info: ArenaInfo) {
                     dest = p.location.toVector().add(Vector(0.0, st.targetYOffset, 0.0))
                     val h = horizontal(ai.pos, dest)
                     speed = if (h < 90.0) st.chargeSpeed else st.speed
-                    if (h < st.passThroughDistance) {
+                    // A pass is over when the dragon actually hit the target, or when it missed and the target
+                    // is now behind it. Merely getting close is not enough: the dragon keeps going until it connects.
+                    val hitRecently = ai.lastHit[p.uniqueId]?.let { tickCount - it <= 3L } == true
+                    val behind = ai.heading.x * (dest.x - ai.pos.x) + ai.heading.z * (dest.z - ai.pos.z) < 0.0
+                    if (hitRecently || (h < st.passThroughDistance && behind)) {
                         // Flew through the target: carry on past it, then come back for another pass.
                         val fwd = ai.heading.clone().setY(0.0)
                         if (fwd.lengthSquared() < 1.0e-6) fwd.setX(1.0)
@@ -416,10 +420,21 @@ class DragonSession(private val plugin: DragonFixPlugin, val info: ArenaInfo) {
         for (p in players) {
             if (!validTarget(ai, p)) continue
             val l = p.location
-            val dx = l.x - ai.pos.x
-            val dz = l.z - ai.pos.z
             val dy = l.y + 0.9 - ai.pos.y
-            if (dx * dx + dz * dz > st.hitRadiusH * st.hitRadiusH || abs(dy) > st.hitRadiusV) continue
+            // The dragon's head is ahead of its centre: a player is hit if they are close to either point.
+            val hx = ai.heading.x
+            val hz = ai.heading.z
+            val hl = sqrt(hx * hx + hz * hz)
+            val ox = if (hl > 1.0e-6) hx / hl * st.headOffset else 0.0
+            val oz = if (hl > 1.0e-6) hz / hl * st.headOffset else 0.0
+            val dxc = l.x - ai.pos.x
+            val dzc = l.z - ai.pos.z
+            val dxh = l.x - (ai.pos.x + ox)
+            val dzh = l.z - (ai.pos.z + oz)
+            val r2 = st.hitRadiusH * st.hitRadiusH
+            if ((dxc * dxc + dzc * dzc > r2 && dxh * dxh + dzh * dzh > r2) || abs(dy) > st.hitRadiusV) continue
+            val dx = dxc
+            val dz = dzc
 
             val last = ai.lastHit[p.uniqueId]
             if (last != null && tickCount - last < st.hitCooldown) continue

@@ -74,6 +74,7 @@ class Settings(c: FileConfiguration) {
     val contactDamage = c.getDouble("combat.contact-damage", 8.0)
     val hitRadiusH = c.getDouble("combat.hit-radius-horizontal", 7.0)
     val hitRadiusV = c.getDouble("combat.hit-radius-vertical", 4.5)
+    val headOffset = c.getDouble("combat.head-offset", 6.0).coerceAtLeast(0.0)
     val hitCooldown = c.getInt("combat.hit-cooldown", 20)
     val knockbackH = c.getDouble("combat.knockback-horizontal", 1.6)
     val knockbackV = c.getDouble("combat.knockback-vertical", 0.75)
