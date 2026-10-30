@@ -48,6 +48,16 @@ flight:
   turn-rate: 14.0
   # Vertical acceleration limit (blocks/tick) when climbing or diving.
   vertical-speed: 0.6
+  # Every waypoint rolls a height so dragons use the whole map, not just one layer:
+  #  - low pass: dives down to the terrain and tears through it (chance below)
+  #  - high pass: cruises above the map (chance below)
+  #  - otherwise it flies at base level
+  low-pass-chance: 0.5
+  high-pass-chance: 0.1
+  # Low passes fly this far above the highest block at the waypoint.
+  low-pass-offset: 0.5
+  # Ground more than this far below the average base height is treated as void and is not dived to.
+  max-dive-below-base-average: 45
   # Cruise altitude is (average base Y) + this. Used when no target is close.
   cruise-height-above-base-average: 18
   # While raiding a base the dragon flies at (average base Y) + this, i.e. through the buildings.
@@ -68,11 +78,6 @@ aggression:
   hunt-range: 160.0
   # Ticks between re-evaluating the target.
   retarget-interval: 30
-  # 0.0 - 1.0 : chance that, when choosing a new target, the dragon goes to RAID a base
-  # even though players are available. Higher = breaks more bases.
-  raid-chance: 0.45
-  # If no player is within hunt-range, the dragon always raids bases.
-  raid-when-no-players: true
   # Ticks a dragon keeps raiding a base before re-evaluating.
   raid-duration: 160
   # Prefer raiding bases of teams that still have living players.
@@ -93,17 +98,29 @@ aggression:
   #   MIDDLE  - only the middle islands and generators
   #   PLAYER  - only players: one random player at a time, switching after player-switch-seconds so a
   #             dragon never stays stuck on an unreachable / ghost player
-  #   ALL     - players, bases and the middle (the original behaviour: raid-chance, hunt-range, ...)
+  #   ALL     - players, bases and the middle spread evenly over the map (see balance below)
   target-modes:
     - ALL
   # RANDOM / HYBRID: extra distance beyond the outermost bases that random points may be picked in.
   random-margin: 40.0
   # HYBRID: chance (0.0 - 1.0) that a new target is a player instead of a random point.
   hybrid-player-chance: 0.25
-  # ALL: chance that a new target is the middle islands / generators (on top of raid-chance for bases).
-  all-middle-chance: 0.15
   # PLAYER / HYBRID: seconds a dragon keeps chasing the same player before picking another at random.
   player-switch-seconds: 12.0
+  # ALL: dragons are split evenly over four parts of the map. A dragon that needs a new target joins the part with
+  # the fewest dragons per weight: the bases, the middle islands / generators, the other areas of the map
+  # (a grid of cells) and the players. A weight of 2.0 gives that part twice the dragons, 0 disables it.
+  balance:
+    base-weight: 1.0
+    middle-weight: 1.0
+    sweep-weight: 1.0
+    player-weight: 1.0
+  # Seconds a dragon patrols one middle island / map area before moving on to the next least crowded one.
+  zone-duration-seconds: 12.0
+  # How far from the centre of a middle island / map area the dragon roams while patrolling.
+  zone-radius: 18.0
+  # Size of the map-area grid cells used by the "other areas" part of the map.
+  sweep-cell-size: 70.0
   # BASE / ALL: send dragons to the bases with the fewest dragons on them, so they do not pile up on one base.
   spread-out: true
 
@@ -162,11 +179,21 @@ map-damage:
   respect-bedwars-protection: true
   # BedWars bed blocks are protected (BedWars1058 tracks them itself).
   protect-beds: true
+  # Protect the TERRAIN around bases and generators from dragons. Off by default: dragons may break the islands
+  # like everything else. Working shops / upgrade NPCs and generators are always kept working either way
+  # (see functional-protect-radius). Takes effect from the next game.
+  protect-bases-and-generators: false
+  # Always protected, even with the option above off: this radius around every generator and shop / team
+  # upgrade NPC, so they keep working.
+  functional-protect-radius: 1.5
+  # Only with protect-bases-and-generators: true
   # Keep this radius clear around every generator location (so generator platforms survive).
   protect-generator-radius: 2.5
   # Keep this radius clear around shop / team upgrade NPC locations.
   protect-shop-radius: 2.5
-  # Keep this radius clear around team spawn points (0 = allow breaking).
+  # Keep this radius clear around each team spawn (the base). Uses the larger of this and protect-spawn-radius.
+  protect-base-radius: 16.0
+  # Extra minimum radius around team spawn points (0 = none).
   protect-spawn-radius: 0.0
 
   restore:

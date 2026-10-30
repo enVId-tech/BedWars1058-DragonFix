@@ -193,6 +193,10 @@ class DragonSession(private val plugin: DragonFixPlugin, val info: ArenaInfo) {
                 ai.overshootTicksLeft--
                 if (ai.overshootTicksLeft <= 0) ai.retargetIn = 0
             }
+            Mode.PATROL -> {
+                ai.zoneTicksLeft--
+                if (ai.zoneTicksLeft <= 0) ai.retargetIn = 0
+            }
             Mode.WANDER -> {}
         }
         if (ai.retargetIn <= 0) chooseTarget(ai)
@@ -241,6 +245,14 @@ class DragonSession(private val plugin: DragonFixPlugin, val info: ArenaInfo) {
                 speed = st.chargeSpeed
                 if (horizontal(ai.pos, dest) < 6.0) ai.retargetIn = 0
             }
+            Mode.PATROL -> {
+                var p = ai.point
+                if (p == null || (horizontal(ai.pos, p) < 8.0 && abs(ai.pos.y - p.y) < 10.0)) {
+                    p = zoneWaypoint(ai)
+                    ai.point = p
+                }
+                dest = p
+            }
             Mode.WANDER -> {
                 if (horizontal(ai.pos, dest) < 8.0) ai.retargetIn = 0
             }
@@ -273,6 +285,19 @@ class DragonSession(private val plugin: DragonFixPlugin, val info: ArenaInfo) {
         ai.raidBase = null
         ai.targetPlayer = null
         ai.point = null
+        val prevZone = ai.zone
+        val prevId = ai.zoneId
+        ai.zone = null
+
+        // Keep chasing the same player until the switch period is over.
+        val locked = ai.lockedTarget
+        if (prevZone == Zone.PLAYER && locked != null && tickCount < ai.lockedUntil && validTarget(ai, locked)) {
+            ai.zone = Zone.PLAYER
+            ai.mode = Mode.HUNT
+            ai.targetPlayer = locked
+            ai.retargetIn = (ai.lockedUntil - tickCount).toInt().coerceAtLeast(1)
+            return
+        }
 
         val modes = st.targetModes
         val mode = if (TargetMode.ALL in modes) TargetMode.ALL else modes.toList()[rnd.nextInt(modes.size)]
@@ -282,31 +307,39 @@ class DragonSession(private val plugin: DragonFixPlugin, val info: ArenaInfo) {
         when (mode) {
             TargetMode.RANDOM -> goRandom(ai)
             TargetMode.HYBRID -> {
-                if (anyone.isNotEmpty() && rnd.nextDouble() < st.hybridPlayerChance) huntLocked(ai, anyone)
+                if (anyone.isNotEmpty() && rnd.nextDouble() < st.hybridPlayerChance) huntLocked(ai, anyone, true)
                 else goRandom(ai)
             }
             TargetMode.BASE -> if (!goBase(ai)) goRandom(ai)
-            TargetMode.MIDDLE -> goMiddle(ai)
-            TargetMode.PLAYER -> if (anyone.isNotEmpty()) huntLocked(ai, anyone) else goRandom(ai)
-            TargetMode.ALL -> {
-                val roll = rnd.nextDouble()
-                val raid = if (inRange.isEmpty()) st.raidWhenNoPlayers else roll < st.raidChance
-                if (raid && goBase(ai)) return
-                if (inRange.isEmpty()) {
-                    goMiddle(ai)
-                    return
-                }
-                if (roll >= st.raidChance && roll < st.raidChance + st.allMiddleChance) {
-                    goMiddle(ai)
-                    return
-                }
-                ai.mode = Mode.HUNT
-                ai.targetPlayer = when (st.targetStrategy) {
-                    TargetStrategy.NEAREST -> inRange.minByOrNull { distance3(ai.pos, it) }
-                    TargetStrategy.RANDOM -> inRange[rnd.nextInt(inRange.size)]
-                    TargetStrategy.LOWEST_HEALTH -> inRange.minByOrNull { it.health }
-                }
-            }
+            TargetMode.MIDDLE -> goMiddle(ai, prevId)
+            TargetMode.PLAYER -> if (anyone.isNotEmpty()) huntLocked(ai, anyone, true) else goRandom(ai)
+            TargetMode.ALL -> goBalanced(ai, inRange, prevId)
+        }
+    }
+
+    /**
+     * ALL mode: every dragon joins the part of the map (bases / middle / other areas / players) that currently has
+     * the fewest dragons relative to its weight, so dragons end up spread evenly instead of bunching up.
+     */
+    private fun goBalanced(ai: DragonAI, inRange: List<Player>, prevId: Int) {
+        val st = s
+        val cats = ArrayList<Pair<Zone, Double>>()
+        if (st.baseWeight > 0.0 && info.bases.isNotEmpty()) cats += Pair(Zone.BASE, st.baseWeight)
+        if (st.middleWeight > 0.0) cats += Pair(Zone.MIDDLE, st.middleWeight)
+        if (st.sweepWeight > 0.0 && sweepCells.isNotEmpty()) cats += Pair(Zone.SWEEP, st.sweepWeight)
+        if (st.playerWeight > 0.0 && inRange.isNotEmpty()) cats += Pair(Zone.PLAYER, st.playerWeight)
+        if (cats.isEmpty()) {
+            goRandom(ai)
+            return
+        }
+        val scores = cats.map { (z, w) -> dragons.count { it !== ai && it.zone == z } / w }
+        val best = scores.minOrNull() ?: 0.0
+        val pool = cats.indices.filter { scores[it] <= best + 1.0e-9 }
+        when (cats[pool[rnd.nextInt(pool.size)]].first) {
+            Zone.BASE -> if (!goBase(ai)) goRandom(ai)
+            Zone.MIDDLE -> goMiddle(ai, prevId)
+            Zone.SWEEP -> goSweep(ai, prevId)
+            Zone.PLAYER -> huntLocked(ai, inRange, false)
         }
     }
 
@@ -316,22 +349,26 @@ class DragonSession(private val plugin: DragonFixPlugin, val info: ArenaInfo) {
         ai.point = randomMapPoint()
     }
 
-    /** Chase one random player for a while; after that period another random player is chosen. */
-    private fun huntLocked(ai: DragonAI, pool: List<Player>) {
+    /** Chase one player for a while; after that period another one is chosen. */
+    private fun huntLocked(ai: DragonAI, pool: List<Player>, randomPick: Boolean) {
         val st = s
-        var target = ai.lockedTarget
-        if (target == null || tickCount >= ai.lockedUntil || !pool.contains(target)) {
-            target = pool[rnd.nextInt(pool.size)]
-            ai.lockedTarget = target
-            ai.lockedUntil = tickCount + st.playerSwitchTicks
-        }
+        val target = if (randomPick) pool[rnd.nextInt(pool.size)] else when (st.targetStrategy) {
+            TargetStrategy.NEAREST -> pool.minByOrNull { distance3(ai.pos, it) }
+            TargetStrategy.RANDOM -> pool[rnd.nextInt(pool.size)]
+            TargetStrategy.LOWEST_HEALTH -> pool.minByOrNull { it.health }
+        } ?: pool[0]
+        ai.lockedTarget = target
+        ai.lockedUntil = tickCount + st.playerSwitchTicks
+        ai.zone = Zone.PLAYER
         ai.mode = Mode.HUNT
         ai.targetPlayer = target
+        ai.retargetIn = st.playerSwitchTicks
     }
 
     private fun goBase(ai: DragonAI): Boolean {
         val base = pickRaidBase(ai) ?: return false
         val st = s
+        ai.zone = Zone.BASE
         ai.mode = Mode.RAID
         ai.raidBase = base
         ai.raidTicksLeft = st.raidDuration
@@ -340,32 +377,109 @@ class DragonSession(private val plugin: DragonFixPlugin, val info: ArenaInfo) {
         return true
     }
 
+    /** Index of the least-crowded zone of [zone] among [count] candidates (ties random, avoiding [avoid]). */
+    private fun leastLoaded(ai: DragonAI, zone: Zone, count: Int, avoid: Int): Int {
+        val load = IntArray(count)
+        for (o in dragons) if (o !== ai && o.zone == zone && o.zoneId in 0 until count) load[o.zoneId]++
+        var ids = (0 until count).toList()
+        if (ids.size > 1) ids = ids.filter { it != avoid }
+        val least = ids.minOf { load[it] }
+        val pool = ids.filter { load[it] == least }
+        return pool[rnd.nextInt(pool.size)]
+    }
+
+    private fun startPatrol(ai: DragonAI, zone: Zone, id: Int, center: Vector, radius: Double) {
+        ai.zone = zone
+        ai.zoneId = id
+        ai.zoneCenter = center
+        ai.zoneRadius = radius
+        ai.zoneTicksLeft = s.zoneDuration
+        ai.retargetIn = s.zoneDuration + 5
+        ai.mode = Mode.PATROL
+        ai.point = zoneWaypoint(ai)
+    }
+
     /** Middle islands and generators (falls back to the centre of the map when there are none). */
-    private fun goMiddle(ai: DragonAI) {
-        val pts = info.middlePoints
-        ai.mode = Mode.WANDER
-        ai.point = if (pts.isEmpty()) wanderPoint() else {
-            val g = pts[rnd.nextInt(pts.size)]
-            Vector(
-                g.x + (rnd.nextDouble() * 2 - 1) * 10.0,
-                info.avgBaseY + s.raidHeight,
-                g.z + (rnd.nextDouble() * 2 - 1) * 10.0,
-            )
+    private fun goMiddle(ai: DragonAI, avoid: Int) {
+        val pts = info.middlePoints.ifEmpty { listOf(Vector(info.centerX, info.avgBaseY, info.centerZ)) }
+        val id = leastLoaded(ai, Zone.MIDDLE, pts.size, avoid)
+        startPatrol(ai, Zone.MIDDLE, id, pts[id], s.zoneRadius)
+    }
+
+    /** Other areas of the map: a grid of cells away from the bases and the middle. */
+    private fun goSweep(ai: DragonAI, avoid: Int) {
+        if (sweepCells.isEmpty()) {
+            goRandom(ai)
+            return
         }
+        val id = leastLoaded(ai, Zone.SWEEP, sweepCells.size, avoid)
+        startPatrol(ai, Zone.SWEEP, id, sweepCells[id], s.sweepCellSize / 2.0)
+    }
+
+    private val mapX0 get() = minX + pad - s.randomMargin
+    private val mapX1 get() = maxX - pad + s.randomMargin
+    private val mapZ0 get() = minZ + pad - s.randomMargin
+    private val mapZ1 get() = maxZ - pad + s.randomMargin
+
+    private val sweepCells: List<Vector> by lazy {
+        val cs = s.sweepCellSize
+        val out = ArrayList<Vector>()
+        val nx = max(1, Math.ceil((mapX1 - mapX0) / cs).toInt())
+        val nz = max(1, Math.ceil((mapZ1 - mapZ0) / cs).toInt())
+        for (ix in 0 until nx) for (iz in 0 until nz) {
+            val c = Vector(mapX0 + (ix + 0.5) * cs, info.avgBaseY, mapZ0 + (iz + 0.5) * cs)
+            // The bases and the middle already have their own zones.
+            if (info.bases.any { horizontal(Vector(it.spawn.x, 0.0, it.spawn.z), c) < cs * 0.6 }) continue
+            if (info.middlePoints.any { horizontal(it, c) < cs * 0.6 }) continue
+            // Skip empty void where the chunk is loaded and nothing is built.
+            if (world.isChunkLoaded(c.x.toInt() shr 4, c.z.toInt() shr 4) && groundY(c.x, c.z) == null) continue
+            out += c
+        }
+        out
     }
 
     /** Anywhere over the map (the area around all bases, plus a margin). */
     private fun randomMapPoint(): Vector {
-        val m = s.randomMargin
-        val x0 = minX + pad - m
-        val x1 = maxX - pad + m
-        val z0 = minZ + pad - m
-        val z1 = maxZ - pad + m
-        return Vector(
-            x0 + rnd.nextDouble() * (x1 - x0),
-            info.avgBaseY + s.cruiseHeight + rnd.nextDouble() * 12.0,
-            z0 + rnd.nextDouble() * (z1 - z0),
-        )
+        val x = mapX0 + rnd.nextDouble() * (mapX1 - mapX0)
+        val z = mapZ0 + rnd.nextDouble() * (mapZ1 - mapZ0)
+        return Vector(x, altitudeFor(x, z), z)
+    }
+
+    /** Surface height at x/z, or null when there is no terrain worth diving to (void / unloaded chunk). */
+    private fun groundY(x: Double, z: Double): Double? {
+        val bx = Math.floor(x).toInt()
+        val bz = Math.floor(z).toInt()
+        if (!world.isChunkLoaded(bx shr 4, bz shr 4)) return null
+        val y = world.getHighestBlockYAt(bx, bz).toDouble()
+        if (y <= 1.0 || y < info.avgBaseY - s.maxDiveDepth) return null
+        return y
+    }
+
+    /**
+     * Picks how high a waypoint is: low passes dive down to the terrain (so dragons carve the whole map, not just
+     * one layer), high passes cruise above everything, the rest fly at base level.
+     */
+    private fun altitudeFor(x: Double, z: Double): Double {
+        val st = s
+        val r = rnd.nextDouble()
+        val mid = info.avgBaseY + st.raidHeight + rnd.nextDouble() * 6.0
+        return when {
+            r < st.lowPassChance -> {
+                val g = groundY(x, z)
+                if (g == null) mid else max(2.0, g + st.lowPassOffset + rnd.nextDouble() * 3.0)
+            }
+            r < st.lowPassChance + st.highPassChance -> info.avgBaseY + st.cruiseHeight + rnd.nextDouble() * 10.0
+            else -> mid
+        }
+    }
+
+    private fun zoneWaypoint(ai: DragonAI): Vector {
+        val c = ai.zoneCenter ?: return wanderPoint()
+        val a = rnd.nextDouble() * Math.PI * 2
+        val r = sqrt(rnd.nextDouble()) * ai.zoneRadius
+        val x = c.x + Math.cos(a) * r
+        val z = c.z + Math.sin(a) * r
+        return Vector(x, altitudeFor(x, z), z)
     }
 
     private fun pickRaidBase(ai: DragonAI): BaseInfo? {
@@ -386,18 +500,18 @@ class DragonSession(private val plugin: DragonFixPlugin, val info: ArenaInfo) {
         return if (pool.isEmpty()) null else pool[rnd.nextInt(pool.size)]
     }
 
-    /** A point in the middle of a base, at the level of the bases (average Y of the map). */
-    private fun raidWaypoint(b: BaseInfo): Vector = Vector(
-        b.spawn.x + (rnd.nextDouble() * 2 - 1) * 12.0,
-        info.avgBaseY + s.raidHeight,
-        b.spawn.z + (rnd.nextDouble() * 2 - 1) * 12.0,
-    )
+    /** A point in a base; the height varies so dragons also dive through the lower parts of the base. */
+    private fun raidWaypoint(b: BaseInfo): Vector {
+        val x = b.spawn.x + (rnd.nextDouble() * 2 - 1) * 12.0
+        val z = b.spawn.z + (rnd.nextDouble() * 2 - 1) * 12.0
+        return Vector(x, altitudeFor(x, z), z)
+    }
 
-    private fun wanderPoint(): Vector = Vector(
-        info.centerX + (rnd.nextDouble() * 2 - 1) * 60.0,
-        info.avgBaseY + s.cruiseHeight,
-        info.centerZ + (rnd.nextDouble() * 2 - 1) * 60.0,
-    )
+    private fun wanderPoint(): Vector {
+        val x = info.centerX + (rnd.nextDouble() * 2 - 1) * 60.0
+        val z = info.centerZ + (rnd.nextDouble() * 2 - 1) * 60.0
+        return Vector(x, altitudeFor(x, z), z)
+    }
 
     private fun horizontal(a: Vector, b: Vector): Double {
         val dx = a.x - b.x

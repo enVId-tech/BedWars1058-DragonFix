@@ -170,15 +170,20 @@ object BedwarsHook {
         }
 
         // Generators: arena-wide (diamond / emerald) and per team (iron / gold).
+        // By default only a small area around each generator / shop is kept (so they keep working);
+        // terrain around bases and generators is protected only with map-damage.protect-bases-and-generators.
+        val full = s.protectBasesAndGenerators
+        val genR = if (full) s.protectGeneratorRadius else s.functionalRadius
+        val shopR = if (full) s.protectShopRadius else s.functionalRadius
         val gens = ArrayList<Any>(arena.oreGenerators)
         for (b in bases) gens.addAll(b.team.generators)
-        for (g in gens) addSphere(Reflect.call(g, "getLocation") as? Location, s.protectGeneratorRadius)
+        for (g in gens) addSphere(Reflect.call(g, "getLocation") as? Location, genR)
 
-        // Shops and team upgrade NPCs, plus optional spawn protection.
+        // Shops and team upgrade NPCs, plus optional spawn / base protection.
         for (b in bases) {
-            addSphere(b.team.shop, s.protectShopRadius)
-            addSphere(b.team.upgrades, s.protectShopRadius)
-            addSphere(b.spawn, s.protectSpawnRadius)
+            addSphere(b.team.shop, shopR)
+            addSphere(b.team.upgrades, shopR)
+            if (full) addSphere(b.spawn, maxOf(s.protectSpawnRadius, s.protectBaseRadius))
         }
         val middle = ArrayList<org.bukkit.util.Vector>()
         for (g in arena.oreGenerators) {

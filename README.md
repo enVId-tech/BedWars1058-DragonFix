@@ -38,6 +38,14 @@ See `config.yml` for every option.
 to the bases with the fewest dragons so they do not pile on one base.
 In game: `/bw-dragonfix config add aggression.target-modes BASE`, `/bw-dragonfix config remove aggression.target-modes ALL`.
 
+## Even spread, altitude and base protection
+* In `ALL` mode dragons are balanced over bases, middle islands, other map areas and players
+  (`aggression.balance.*-weight`), and they patrol each area for `zone-duration-seconds`.
+* Waypoints roll a height (`flight.low-pass-chance`, `flight.high-pass-chance`): low passes dive to the terrain, so the
+  whole map gets carved, not one layer.
+* `map-damage.protect-bases-and-generators` (default `false`) protects the terrain around bases and generators.
+  Shops, upgrade NPCs and generators keep working either way (`functional-protect-radius`).
+
 ## Developer note
 This plugin is coded with AI assistance and architected completely by me. Regardless, use at your own risk.
 

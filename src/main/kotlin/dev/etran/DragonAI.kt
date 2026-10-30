@@ -9,7 +9,10 @@ import kotlin.math.acos
 import kotlin.math.atan2
 import kotlin.math.sqrt
 
-enum class Mode { HUNT, RAID, OVERSHOOT, WANDER }
+enum class Mode { HUNT, RAID, OVERSHOOT, WANDER, PATROL }
+
+/** Which part of the map a dragon is assigned to; used to spread dragons evenly. */
+enum class Zone { BASE, MIDDLE, SWEEP, PLAYER }
 
 /** Reflection shims for EnderDragon API that only exists on 1.9+. */
 object DragonCompat {
@@ -52,6 +55,13 @@ class DragonAI(val dragon: EnderDragon, val base: BaseInfo?, startPos: Vector, s
     var lastRaidBase: BaseInfo? = null
 
     var retargetIn = 0
+
+    /** Zone assignment (see [Zone]); [zoneId] indexes the middle point / sweep cell. */
+    var zone: Zone? = null
+    var zoneId = -1
+    var zoneCenter: Vector? = null
+    var zoneRadius = 0.0
+    var zoneTicksLeft = 0
 
     /** PLAYER / HYBRID hunting: stick to one player until this tick, then pick another at random. */
     var lockedTarget: Player? = null
